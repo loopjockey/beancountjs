@@ -1,0 +1,7 @@
+// Credit: https://github.com/LaunchPlatform/beancount-parser/blob/master/beancount_parser/grammar/account.lark
+
+NON_ASCII: /[^\x00-\x7f]/
+
+ACCOUNT_TYPE: (/[A-Z]/ | NON_ASCII) (/[A-Za-z0-9\-]/ | NON_ASCII)*
+ACCOUNT_NAME: (/[A-Z0-9]/ | NON_ASCII) (/[A-Za-z0-9\-]/ | NON_ASCII)*
+ACCOUNT: ACCOUNT_TYPE (":" ACCOUNT_NAME)+

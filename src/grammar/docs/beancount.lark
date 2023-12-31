@@ -1,0 +1,123 @@
+// Credit: https://github.com/LaunchPlatform/beancount-parser/blob/master/beancount_parser/grammar/beancount.lark
+
+// Number
+
+// Reduce priority of unary operators to align with the beancount behavior that
+// "2000-01-01 custom 123 -456" is interpreted as "2000-01-01 custom -333"
+
+UNARY_OP.-10: "+" | "-"
+ADD_OP: "+" | "-"
+MUL_OP: "*" | "/"
+
+number_expr: number_add_expr
+?number_add_expr: number_mul_expr (ADD_OP number_mul_expr)*
+?number_mul_expr: number_atom (MUL_OP number_atom)*
+?number_atom: NUMBER | "(" number_add_expr ")" | UNARY_OP number_atom
+
+currencies: CURRENCY ("," CURRENCY)*
+amount: number_expr CURRENCY
+amount_tolerance: number_expr "~" number_expr CURRENCY
+
+// Metadata
+METADATA_KEY: LCASE_LETTER (LETTER | DIGIT | "-" | "_")*
+?metadata_value: ESCAPED_STRING
+                    | ACCOUNT
+                    | CURRENCY
+                    | DATE
+                    | number_expr
+                    | TAGS
+                    | amount
+metadata_item: METADATA_KEY ":" metadata_value
+
+// Date directives
+?annotation_item: TAG | LINK
+annotations: annotation_item+
+
+?custom_arg: DATE
+    | ACCOUNT
+    | ESCAPED_STRING
+    | number_expr
+    | CURRENCY
+    | BOOLEAN
+
+// make it a token so that it will present in the `children`, otherwise the number
+// of child for txn will be different makes it harder to process
+TXN: "txn"
+
+open:      DATE "open" ACCOUNT [currencies] [ESCAPED_STRING]
+close:     DATE "close" ACCOUNT
+balance:   DATE "balance" ACCOUNT (amount | amount_tolerance)
+event:     DATE "event" ESCAPED_STRING ESCAPED_STRING
+commodity: DATE "commodity" CURRENCY
+document:  DATE "document" ACCOUNT ESCAPED_STRING
+note:      DATE "note" ACCOUNT ESCAPED_STRING
+pad:       DATE "pad" ACCOUNT ACCOUNT
+price:     DATE "price" CURRENCY amount
+custom:    DATE "custom" custom_arg+
+txn:       DATE [TXN | FLAG] [[ESCAPED_STRING] ESCAPED_STRING] [annotations]
+
+date_directive: open
+                | close
+                | balance
+                | event
+                | commodity
+                | document
+                | note
+                | pad
+                | price
+                | custom
+                | txn
+
+// Simple directives
+option: "option" ESCAPED_STRING ESCAPED_STRING
+include: "include" ESCAPED_STRING
+plugin: "plugin" ESCAPED_STRING [ESCAPED_STRING]
+
+simple_directive: option
+                 | include
+                 | plugin
+
+// Posting
+per_unit_cost: "{" amount "}"
+total_cost: "{{" amount "}}"
+both_cost: "{" number_expr  "#" amount "}"
+dated_cost: "{" amount "," DATE "}"
+?cost: per_unit_cost | total_cost | both_cost | dated_cost
+
+per_unit_price: "@" amount
+total_price: "@@" amount
+?posting_price: per_unit_price | total_price
+
+detailed_posting: [FLAG] ACCOUNT amount [cost] [posting_price]
+// the special case where only Account is present
+simple_posting: [FLAG] ACCOUNT
+posting: detailed_posting | simple_posting
+
+?directive: date_directive
+        | simple_directive
+        | posting
+        | metadata_item
+_EMPTY_LINE: /[ \t]*[\r\n]/
+statement: directive [COMMENT] | COMMENT | SECTION_HEADER
+start: _EMPTY_LINE* (statement _NL+)* [statement]
+
+%import common.WS_INLINE -> _WS
+%import common.NEWLINE -> _NL
+%import common.LCASE_LETTER
+%import common.LETTER
+%import common.DIGIT
+
+%import .comment.COMMENT
+%import .section_header.SECTION_HEADER
+%import .numbers.NUMBER
+%import .account.ACCOUNT
+%import .flag.FLAG
+%import .currency.CURRENCY
+%import .date.DATE
+%import .tag.TAGS
+%import .tag.TAG
+%import .link.LINK
+%import .boolean.BOOLEAN
+%import .escaped_string.ESCAPED_STRING
+
+%ignore _WS
