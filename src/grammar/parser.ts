@@ -51,7 +51,7 @@ export const parseNumber = (value: string): [Error | null, number | null] => {
     }
 }
 
-// YYYY-MM-DD open {{ account_name }} [{{ ConstrainCurrency }}]
+// YYYY-MM-DD open {{ account_name }} ["|"] [{{ ConstrainCurrency }}]
 export type OpenAccount = { type: 'open', date: Date, account: string, currency?: string };
 
 // YYYY-MM-DD close {{ account_name }}
@@ -59,9 +59,6 @@ export type CloseAccount = { type: 'close', date: Date, account: string };
 
 // YYYY-MM-DD commodity {{ currency_name }}
 export type Commodity = { type: 'commodity', currency: string };
-
-// YYYY-MM-DD * "Transfer from Savings account"
-export type Transaction = { type: 'transaction', txn: '*' | '!', date: Date, payee?: string, comment: string, link?: string };
 
 // YYYY-MM-DD balance {{ account_name }} {{ amount }}
 export type Balance = { type: 'balance', date: Date, account: string, amount: number };
@@ -87,8 +84,53 @@ export type PopTag = { type: 'poptag', tag: string };
 // include {{ path/to/file.beancount }}
 export type Include = { type: 'include', path: string };
 
-//[!] Assets:MyBank:Checking -400.00 USD
-export type TransactionLineItem = { type: 'lineitem', txn?: '!', account: string, amount?: number, currency?: string };
+// 2014-07-09 price USD  1.08 CAD
+export type Price = { type: 'price', date: Date, commodity: string, price: number, currency: string }
+
+// 2014-07-09 event "location" "Paris, France"
+export type Event = { type: 'event', date: Date, name: string, value: string };
+
+// plugin "beancount.plugins.module_name" "configuration data"
+export type Plugin = { type: 'plugin', name: string, value: string };
+
+// e.g. 2014-07-09 custom "budget" "..." TRUE 45.30 USD
+export type Custom = { type: 'custom', date: Date, args: string[] };
+
+// YYYY-MM-DD * "Transfer from Savings account"
+export type Transaction = {
+    type: 'transaction',
+    txn: '*' | '!',
+    date: Date, payee?: string,
+    comment: string,
+    // 2014-02-05 * "Invoice for January" ^invoice-pepe-studios-jan14
+    link?: string,
+    // 2014-04-23 * "Flight to Berlin" #berlin-trip-2014 #germany
+    tags?: string[]
+};
+
+//[!] Assets:MyBank:Checking -400.00 SPX
+export type TransactionLineItem = {
+    type: 'lineitem',
+    txn?: '!',
+    account: string,
+    amount?: number,
+    commodity?: string,
+    // Assets:ETrade:IVV 10 IVV {183.07 USD} ; held at cost (investing)
+    cost?: {
+        amount: number,
+        currency: string,
+        // Assets:ETrade:IVV 20 IVV {183.07 USD, "ref-001"}
+        // Assets:ETrade:IVV -20 IVV {2014-02-11}
+        // Assets:ETrade:IVV -35 IVV {}
+        lot?: string | Date | true
+    },
+    // Assets:MyBank:Checking -400.00 USD @@ 436.01 CAD
+    // Assets:MyBank:Checking -400.00 USD @ 436.01 CAD
+    price?: {
+        amount: number,
+        currency: string,
+    }
+};
 
 export type Directive =
     OpenAccount | CloseAccount | Commodity | Option |
@@ -106,6 +148,8 @@ export const parseLine = (line: string[]) => {
             case "open":
             case "close":
             case "commodity":
+                // TODO: Commodity has "metadata"
+                return '';
             case "*":
             case "!":
             case "balance":
@@ -127,5 +171,5 @@ export const parseLine = (line: string[]) => {
                 return '';
         }
     }
-    
+
 }
