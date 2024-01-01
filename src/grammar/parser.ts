@@ -1,5 +1,3 @@
-import { dir } from "console";
-
 export function* streamBeancountFile(chunks: IterableIterator<string>): IterableIterator<string[]> {
     for (const chunk of chunks) {
         // Split the text into lines
@@ -58,7 +56,7 @@ export type OpenAccount = { type: 'open', date: Date, account: string, currency?
 export type CloseAccount = { type: 'close', date: Date, account: string };
 
 // YYYY-MM-DD commodity {{ currency_name }}
-export type Commodity = { type: 'commodity', currency: string };
+export type Commodity = { type: 'commodity', date: Date, currency: string };
 
 // YYYY-MM-DD balance {{ account_name }} {{ amount }}
 export type Balance = { type: 'balance', date: Date, account: string, amount: number };
@@ -95,6 +93,8 @@ export type Plugin = { type: 'plugin', name: string, value: string };
 
 // e.g. 2014-07-09 custom "budget" "..." TRUE 45.30 USD
 export type Custom = { type: 'custom', date: Date, args: string[] };
+
+export type Unknown = { type: 'unknown', line: string[] };
 
 // YYYY-MM-DD * "Transfer from Savings account"
 export type Transaction = {
@@ -135,21 +135,62 @@ export type TransactionLineItem = {
 export type Directive =
     OpenAccount | CloseAccount | Commodity | Option |
     PushTag | PopTag | Transaction | TransactionLineItem |
-    Balance | Pad | Note | Document | Include;
+    Balance | Pad | Note | Document | Include | Unknown;
 
-export const parseLine = (line: string[]) => {
+// YYYY-MM-DD open {{ account_name }} ["|"] [{{ ConstrainCurrency }}]
+export const parseOpenAccount = (line: string[], date: Date): OpenAccount => {
+    // eslint-disable-next-line prefer-const
+    let [, , account_name, currency_or_pipe, currency] = line;
+    if (currency_or_pipe === "|") {
+        currency = currency_or_pipe;
+    }
+    return { type: 'open', account: account_name, date, currency }
+}
+
+// YYYY-MM-DD close {{ account_name }}
+export const parseCloseAccount = (line: string[], date: Date): CloseAccount => {
+    const [, , account_name] = line;
+    return { type: 'close', account: account_name, date }
+}
+
+// YYYY-MM-DD commodity {{ currency_name }}
+export const parseCommodity = (line: string[], date: Date): Commodity => {
+    const [, , currency_name] = line;
+    return { type: 'commodity', currency: currency_name, date }
+}
+
+// YYYY-MM-DD * "Transfer from Savings account"
+// 2014-02-05 * "Invoice for January" ^invoice-pepe-studios-jan14
+// 2014-04-23 * "Flight to Berlin" #berlin-trip-2014 #germany
+export const parseTransaction = (line: string[], date: Date): Transaction => {
+    const [, txn, ]
+}
+
+//[!] Assets:MyBank:Checking -400.00 SPX
+// Assets:ETrade:IVV 10 IVV {183.07 USD} ; held at cost (investing)
+// Assets:ETrade:IVV 20 IVV {183.07 USD, "ref-001"}
+// Assets:ETrade:IVV -20 IVV {2014-02-11}
+// Assets:ETrade:IVV -35 IVV {}
+// Assets:MyBank:Checking -400.00 USD @@ 436.01 CAD
+// Assets:MyBank:Checking -400.00 USD @ 436.01 CAD
+export const parseTransactionLineItem = (line:string[], date: Date): TransactionLineItem => {
+
+}
+
+export const parseLine = (line: string[]): Directive => {
     const [directive] = line;
-    if (directive === undefined || !directive.length) return null;
+    if (directive === undefined || !directive.length) return { type: 'unknown', line };
     if (Number.isInteger(Number(directive[0]))) {
         const [dateErr, date] = parseDate(directive);
-        if (dateErr) throw dateErr;
-        const [_, innerDirective] = line;
+        if (dateErr || !date) throw dateErr || new Error('Date parsing critical failure');
+        const [, innerDirective] = line;
         switch (innerDirective) {
             case "open":
+                return parseOpenAccount(line, date);
             case "close":
+                return parseCloseAccount(line, date);
             case "commodity":
-                // TODO: Commodity has "metadata"
-                return '';
+                return parseCommodity(line, date);
             case "*":
             case "!":
             case "balance":
